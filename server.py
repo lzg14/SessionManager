@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Session Viewer - Backend"""
-import json, sqlite3, webbrowser, threading
+import json, sqlite3, webbrowser, threading, shutil
 from pathlib import Path
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -23,6 +23,148 @@ def find_claude_sessions():
 CLAUDE_SESSIONS = find_claude_sessions()
 OPENCODE = HOME / ".local" / "share" / "opencode" / "opencode.db"
 PI = HOME / ".pi" / "agent" / "sessions"
+import os
+DSH_HOME = Path(os.environ.get("DSH_HOME") or (HOME / ".dsh"))
+DSH_SESSIONS = DSH_HOME / "sessions"
+
+
+def _dsh_read_log(path):
+    """读取一个 DSH session 日志，返回解码后的文本（支持 zstd 压缩与多帧拼接）"""
+    data = path.read_bytes()
+    if path.suffix == ".zstd":
+        try:
+            from compression import zstd
+        except ImportError:
+            print("[DSH] 需要 Python 3.14+ (compression.zstd) 才能读取 .jsonl.zstd 日志")
+            return None
+        # 日志是多个独立 zstd 帧拼接（header 一帧 + 每个 append batch 一帧），逐帧解码
+        chunks = []
+        rest = data
+        while rest:
+            d = zstd.ZstdDecompressor()
+            chunks.append(d.decompress(rest))
+            if not d.eof:
+                break
+            rest = d.unused_data
+        return b"".join(chunks).decode("utf-8", "replace")
+    return data.decode("utf-8", "replace")
+
+
+def _dsh_blocks_text(content):
+    """从 ContentBlock 列表提取纯文本（text 块；跳过 reasoning/image/tool 等）"""
+    if isinstance(content, str):
+        return content
+    parts = []
+    if isinstance(content, list):
+        for b in content:
+            if isinstance(b, dict) and b.get("type") == "text" and b.get("text"):
+                parts.append(b["text"])
+    return "\n".join(parts)
+
+
+def parse_dsh():
+    """解析 DeepSeek Harness (dsh) 会话：~/.dsh/sessions/<project>/<session>/session.jsonl[.zstd]"""
+    sessions = {}
+    if not DSH_SESSIONS.exists():
+        return sessions
+    for proj_dir in DSH_SESSIONS.iterdir():
+        if not proj_dir.is_dir():
+            continue
+        for sess_dir in proj_dir.iterdir():
+            if not sess_dir.is_dir():
+                continue
+            path = None
+            for name in ("session.jsonl.zstd", "session.jsonl"):
+                cand = sess_dir / name
+                if cand.exists():
+                    path = cand
+                    break
+            if path is None:
+                continue
+            text = None
+            try:
+                text = _dsh_read_log(path)
+            except Exception:
+                continue
+            if not text:
+                continue
+            sid = None
+            project = None
+            start = None
+            title = ""
+            msgs = []
+            try:
+                for line in text.splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        d = json.loads(line)
+                    except Exception:
+                        continue
+                    if not isinstance(d, dict):
+                        continue
+                    t = d.get("type", "")
+                    # 第一行是 session header
+                    if t == "session":
+                        sid = d.get("id") or sess_dir.name
+                        cwd = d.get("cwd")
+                        if cwd:
+                            project = cwd
+                        created = d.get("createdAt")
+                        if isinstance(created, (int, float)) and created > 0:
+                            try:
+                                start = datetime.fromtimestamp(created / 1000).isoformat()
+                            except Exception:
+                                pass
+                        continue
+                    # 事件行（打包的 chunk 行没有 type/seq，自动跳过）
+                    if "seq" not in d:
+                        continue
+                    if t == "session/title":
+                        ti = d.get("data", {}).get("title")
+                        if ti:
+                            title = ti
+                    elif t == "user/message":
+                        msg = d.get("data", {}) or {}
+                        src = msg.get("source") or {}
+                        # 跳过注入的上下文（文件变更通知/AGENTS.md 等），只保留真人消息
+                        if src.get("kind") not in (None, "user"):
+                            continue
+                        body = _dsh_blocks_text(msg.get("content"))
+                        if body and body.strip():
+                            msgs.append({"role": "user", "content": body[:500], "time": _dsh_time(d)})
+                    elif t == "assistant/message":
+                        am = (d.get("data", {}) or {}).get("message", {}) or {}
+                        body = _dsh_blocks_text(am.get("content"))
+                        if body and body.strip():
+                            msgs.append({"role": "assistant", "content": body[:500], "time": _dsh_time(d)})
+            except Exception:
+                continue
+            if not msgs:
+                continue  # 空白会话不展示
+            if not project:
+                project = proj_dir.name
+            sessions[sid] = {
+                "id": sid,
+                "tool": "DeepSeek Harness",
+                "project": project,
+                "title": title,
+                "start": start,
+                "msgs": msgs,
+                "dir": str(sess_dir),
+            }
+    return sessions
+
+
+def _dsh_time(event):
+    ts = event.get("time")
+    if isinstance(ts, (int, float)) and ts > 0:
+        try:
+            return datetime.fromtimestamp(ts / 1000).isoformat()
+        except Exception:
+            return None
+    return None
 
 
 def parse_claude():
@@ -170,6 +312,7 @@ def get_all_sessions_cached():
         all_s.extend(parse_claude().values())
         all_s.extend(parse_opencode().values())
         all_s.extend(parse_pi().values())
+        all_s.extend(parse_dsh().values())
         # 生成标题
         for s in all_s:
             if not s.get('title'):
@@ -186,7 +329,7 @@ def get_all(tool='all', search=''):
     all_s = copy.deepcopy(get_all_sessions_cached())
     # 按工具类型筛选
     if tool and tool != 'all':
-        tool_map = {'claude': 'Claude Code', 'opencode': 'OpenCode', 'pi': 'Pi'}
+        tool_map = {'claude': 'Claude Code', 'opencode': 'OpenCode', 'pi': 'Pi', 'dsh': 'DeepSeek Harness'}
         target = tool_map.get(tool, tool)
         all_s = [s for s in all_s if s.get('tool') == target]
     if search:
@@ -226,6 +369,7 @@ class Handler(SimpleHTTPRequestHandler):
                 'claude': sum(1 for s in all_sessions if s['tool'] == 'Claude Code'),
                 'opencode': sum(1 for s in all_sessions if s['tool'] == 'OpenCode'),
                 'pi': sum(1 for s in all_sessions if s['tool'] == 'Pi'),
+                'dsh': sum(1 for s in all_sessions if s['tool'] == 'DeepSeek Harness'),
             }
             # 再按筛选条件获取列表
             sessions = get_all(params.get('tool', ['all'])[0], params.get('search', [''])[0])
@@ -287,6 +431,11 @@ class Handler(SimpleHTTPRequestHandler):
                         proj = s.get('project', '').replace('/', '--')
                         f = PI / proj / f"{sid}.jsonl"
                         if f.exists(): f.unlink()
+                    elif tool == 'DeepSeek Harness':
+                        # dsh：删除整个 session 目录（含日志与附属 artifacts）
+                        d = s.get('dir')
+                        if d and Path(d).exists():
+                            shutil.rmtree(d, ignore_errors=True)
                     # 从缓存中移除
                     all_s.pop(i)
                     self.send_json({'ok': True})

@@ -1,14 +1,14 @@
 # Session Manager  
 
-A lightweight manager for AI coding sessions. Browse, search, restore, and delete sessions from Claude Code, OpenCode, and Pi.
+A lightweight manager for AI coding sessions. Browse, search, restore, and delete sessions from Claude Code, OpenCode, Pi, and DeepSeek Harness (dsh).
 
 ![Session Manager](static/pic.png)
 
 ## Features
 
--   **Unified View** — Browse sessions from all 3 AI tools in one place
+-   **Unified View** — Browse sessions from all supported AI tools in one place
 -   **Search** — Full-text search across all sessions
--   **Filter** — Filter by tool type (Claude / OpenCode / Pi)
+-   **Filter** — Filter by tool type (Claude / OpenCode / Pi / DSH)
 -   **Restore** — Copy resume commands to continue any session
 -   **Export** — Export sessions as Markdown
 -   **List/Card View** — Toggle between list and grid layouts
@@ -20,6 +20,7 @@ A lightweight manager for AI coding sessions. Browse, search, restore, and delet
 | Claude Code | `~/.claude/projects/**/*.jsonl` |
 | OpenCode | `~/.local/share/opencode/opencode.db` |
 | Pi | `~/.pi/agent/sessions/**/*.jsonl` |
+| DeepSeek Harness | `$DSH_HOME/sessions/*/*/session.jsonl[.zstd]`（默认 `~/.dsh/sessions`；zstd 日志需 Python 3.14+） |
 
 ## Quick Start
 
@@ -39,6 +40,7 @@ A lightweight manager for AI coding sessions. Browse, search, restore, and delet
 | Claude Code | `claude --resume <session-id>` |
 | OpenCode | `opencode -s <session-id>` |
 | Pi | `pi -s <session-id>` |
+| DeepSeek Harness | `dsh --profile tui --resume <session-id>` |
 
 ## License
 

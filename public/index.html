@@ -17,6 +17,7 @@
   --claude:#f59e0b;
   --opencode:#10b981;
   --pi:#8b5cf6;
+  --dsh:#0ea5e9;
   --radius:12px;
   --shadow:0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
   --shadow-lg:0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
@@ -62,6 +63,8 @@ h1::before{content:" ";font-size:28px}
 .tool-tag.claude{background:linear-gradient(135deg,#f59e0b,#d97706)}
 .tool-tag.opencode{background:linear-gradient(135deg,#10b981,#059669)}
 .tool-tag.pi{background:linear-gradient(135deg,#8b5cf6,#7c3aed)}
+.tool-tag.dsh{background:linear-gradient(135deg,#0ea5e9,#0284c7)}
+.tool-tag.dsh{background:linear-gradient(135deg,#0ea5e9,#0284c7)}
 .session-project{font-size:14px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
 .session-id{font-size:11px;color:var(--text-muted);flex-shrink:0;font-family:'SF Mono',Monaco,monospace;background:var(--bg);padding:4px 8px;border-radius:6px;border:1px solid var(--border)}
 .session-count{font-size:12px;color:var(--text-secondary);flex-shrink:0;font-weight:500;background:var(--primary-light);padding:4px 10px;border-radius:6px}
@@ -75,12 +78,14 @@ h1::before{content:" ";font-size:28px}
 .modal.active{display:flex}
 .modal-content{background:var(--surface);border-radius:16px;width:100%;max-width:900px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25)}
 .modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:linear-gradient(180deg,var(--surface) 0%,var(--bg) 100%)}
-.modal-header h2{font-size:18px;font-weight:700;color:var(--text)}
+.modal-header h2{font-size:18px;font-weight:700;color:var(--text);min-width:0;flex-shrink:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .modal-actions{display:flex;gap:8px;align-items:center;flex-wrap:nowrap}
-.modal-actions input{padding:10px 14px;border:2px solid var(--border);border-radius:var(--radius);font-size:13px;width:160px;flex-shrink:0;transition:all 0.2s}
+.modal-actions input{padding:10px 14px;border:2px solid var(--border);border-radius:var(--radius);font-size:13px;width:140px;flex-shrink:0;transition:all 0.2s;white-space:nowrap}
 .modal-actions input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
-.modal-actions button{padding:10px 16px;border:2px solid var(--border);background:var(--surface);border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:600;transition:all 0.2s;box-shadow:var(--shadow)}
+.modal-actions button{padding:10px 16px;border:2px solid var(--border);background:var(--surface);border-radius:var(--radius);cursor:pointer;font-size:13px;font-weight:600;transition:all 0.2s;box-shadow:var(--shadow);white-space:nowrap;flex-shrink:0}
 .modal-actions button:hover{background:var(--primary-light);border-color:var(--primary);transform:translateY(-1px)}
+@media (max-width:760px){.modal-actions input{display:none}.modal-actions button{padding:8px 10px;font-size:12px}}
+.modal-header{flex-wrap:nowrap}
 .modal-body{padding:24px;overflow-y:auto;flex:1}
 .session-meta{font-size:13px;color:var(--text-secondary);margin-bottom:24px;padding:20px;background:linear-gradient(135deg,var(--bg) 0%,var(--primary-light) 100%);border-radius:var(--radius);line-height:2;border:1px solid var(--border)}
 .session-meta code{background:var(--surface);padding:4px 10px;border-radius:6px;font-size:12px;border:1px solid var(--border);font-family:'SF Mono',Monaco,monospace}
@@ -143,6 +148,7 @@ h1::before{content:" ";font-size:28px}
 <button class="filter-btn" data-filter="claude">Claude</button>
 <button class="filter-btn" data-filter="opencode">OpenCode</button>
 <button class="filter-btn" data-filter="pi">Pi</button>
+<button class="filter-btn" data-filter="dsh">DSH</button>
 <button class="filter-btn" onclick="loadSessions()" data-zh="  刷新" data-en="  Refresh">  刷新</button>
 </div>
 </div>
@@ -150,7 +156,7 @@ h1::before{content:" ";font-size:28px}
 <div id="pager" class="pager"></div>
 </div>
 <footer style="text-align:center;padding:32px 0 16px;color:var(--text-muted);font-size:12px;border-top:1px solid var(--border);margin-top:32px">
-  Session Manager v1.0 · Session Manager for Claude Code / OpenCode / Pi
+  Session Manager v1.1 · Session Manager for Claude Code / OpenCode / Pi / DeepSeek Harness
 </footer>
 </div>
 <div class="modal" id="modal">
@@ -158,7 +164,7 @@ h1::before{content:" ";font-size:28px}
 <div class="modal-header">
 <h2 id="modal-title"></h2>
 <div class="modal-actions">
-<input type="text" id="msgSearch" placeholder="搜索消息..." style="padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px;width:150px">
+<input type="text" id="msgSearch" placeholder="搜索消息..." style="padding:4px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px;width:140px;white-space:nowrap">
 <button onclick="copyId()" data-zh="复制ID" data-en="Copy ID">复制ID</button>
 <button onclick="copyCmd()" data-zh="复制命令" data-en="Copy Cmd">复制命令</button>
 <button onclick="exportSession()" data-zh="导出" data-en="Export">导出</button>
@@ -190,6 +196,7 @@ async function loadSessions(){
   btns[1].innerHTML=fmt("Claude",d.stats.claude);
   btns[2].innerHTML=fmt("OpenCode",d.stats.opencode);
   btns[3].innerHTML=fmt("Pi",d.stats.pi);
+  btns[4].innerHTML=fmt("DSH",d.stats.dsh||0);
   renderSessions();
 }
 
@@ -202,7 +209,7 @@ function renderSessions(){
   const start=(curPage-1)*pageSize;
   const list=allSessions.slice(start,start+pageSize);
   c.innerHTML=list.map(x=>{
-    const cls=x.tool==="Claude Code"?"claude":x.tool.toLowerCase();
+    const cls=x.tool==="Claude Code"?"claude":x.tool==="OpenCode"?"opencode":x.tool==="Pi"?"pi":"dsh";
     const t=x.start?fmt(x.start):"";
     const cmd=x.tool==="Claude Code"?"claude --resume ":x.tool==="OpenCode"?"opencode -s ":"pi -s ";
     const match=x.match?'<div class="session-match">'+esc(x.match)+'</div>':'';
@@ -232,7 +239,7 @@ document.querySelector("h1").textContent="  Session Manager";
 document.getElementById("search").placeholder=zhLang?"搜索项目或内容...":"Search...";
 const btns=document.querySelectorAll(".filter-btn");
 
-btns[4].textContent=zhLang?"  刷新":"  Refresh";
+btns[5].textContent=zhLang?"  刷新":"  Refresh";
 document.querySelectorAll(".modal-actions button").forEach(b=>{
   if(b.dataset.zh) b.textContent=zhLang?b.dataset.zh:b.dataset.en;
 });
@@ -268,6 +275,7 @@ function getCmd(s){
   if(s.tool==="Claude Code")return "claude --resume "+s.id;
   if(s.tool==="OpenCode")return "opencode -s "+s.id;
   if(s.tool==="Pi")return "pi -s "+s.id;
+  if(s.tool==="DeepSeek Harness")return "dsh --profile tui --resume "+s.id;
   return "";
 }
 
