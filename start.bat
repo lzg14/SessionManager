@@ -2,7 +2,7 @@
 title Session Manager
 cd /d "%~dp0"
 
-:: 检查端口是否已被占用
+rem Check whether port 5690 is already in use
 netstat -ano | findstr ":5690" | findstr "LISTENING" >nul 2>&1
 if %errorlevel%==0 (
     echo Session Manager is already running at http://localhost:5690
@@ -10,20 +10,23 @@ if %errorlevel%==0 (
     goto :end
 )
 
-:: 尝试系统 Python
-where python >nul 2>&1 && (
+rem Try system Python
+where python >nul 2>&1
+if %errorlevel%==0 (
     python server.py
     goto :end
 )
 
-:: 尝试 python3
-where python3 >nul 2>&1 && (
+rem Try python3
+where python3 >nul 2>&1
+if %errorlevel%==0 (
     python3 server.py
     goto :end
 )
 
-:: 尝试 py launcher
-where py >nul 2>&1 && (
+rem Try py launcher
+where py >nul 2>&1
+if %errorlevel%==0 (
     py server.py
     goto :end
 )
